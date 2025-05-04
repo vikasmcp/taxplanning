@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 from taxation_tool import TaxCalculator
-import json
 
 def main():
     st.title("Indian Tax Planning Assistant")
@@ -13,9 +12,6 @@ def main():
     
     # Income Details
     income = st.sidebar.number_input("Annual Income (₹)", min_value=0.0, value=500000.0, step=10000.0)
-    
-    # Tax Regime Selection
-    regime = st.sidebar.radio("Select Tax Regime", ['old', 'new'])
     
     # Deductions Input
     st.sidebar.header("Deductions")
@@ -43,49 +39,79 @@ def main():
 
     # Calculate Tax
     if st.button("Calculate Tax"):
-        # Get tax calculation
-        tax_details = calculator.calculate_tax(income, deductions, regime)
+        # Get tax comparison
+        comparison = calculator.compare_tax_regimes(income, deductions)
+        old_regime = comparison['old_regime']
+        new_regime = comparison['new_regime']
         
         # Get recommendations
         recommendations = calculator.get_recommendations(income, deductions)
         
         # Display Results
-        st.header("Tax Calculation Results")
+        st.header("Tax Regime Comparison")
         
+        # Create three columns for comparison
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.subheader("Old Regime")
+            st.write(f"Gross Income: ₹{old_regime['gross_income']:,.2f}")
+            st.write(f"Total Deductions: ₹{old_regime['total_deductions']:,.2f}")
+            st.write(f"Taxable Income: ₹{old_regime['taxable_income']:,.2f}")
+            st.write(f"Base Tax: ₹{old_regime['base_tax']:,.2f}")
+            st.write(f"Cess: ₹{old_regime['cess']:,.2f}")
+            st.write(f"Total Tax: ₹{old_regime['total_tax']:,.2f}")
+        
+        with col2:
+            st.subheader("New Regime")
+            st.write(f"Gross Income: ₹{new_regime['gross_income']:,.2f}")
+            st.write(f"Total Deductions: ₹{new_regime['total_deductions']:,.2f}")
+            st.write(f"Taxable Income: ₹{new_regime['taxable_income']:,.2f}")
+            st.write(f"Base Tax: ₹{new_regime['base_tax']:,.2f}")
+            st.write(f"Cess: ₹{new_regime['cess']:,.2f}")
+            st.write(f"Total Tax: ₹{new_regime['total_tax']:,.2f}")
+        
+        with col3:
+            st.subheader("Summary")
+            st.write("Recommended Regime:", comparison['recommended_regime'].upper())
+            st.write(f"You save: ₹{comparison['savings']:,.2f}")
+            
+            # Add a visual indicator for recommended regime
+            if comparison['recommended_regime'] == 'old':
+                st.success("Old Regime is better for you!")
+            else:
+                st.success("New Regime is better for you!")
+        
+        # Tax Breakup Comparison
+        st.header("Tax Breakup Comparison")
         col1, col2 = st.columns(2)
         
         with col1:
-            st.subheader("Income & Deductions")
-            st.write(f"Gross Income: ₹{tax_details['gross_income']:,.2f}")
-            st.write(f"Total Deductions: ₹{tax_details['total_deductions']:,.2f}")
-            st.write(f"Taxable Income: ₹{tax_details['taxable_income']:,.2f}")
+            st.subheader("Old Regime Breakup")
+            old_breakup_df = pd.DataFrame(old_regime['tax_breakup'])
+            st.table(old_breakup_df)
         
         with col2:
-            st.subheader("Tax Liability")
-            st.write(f"Base Tax: ₹{tax_details['base_tax']:,.2f}")
-            st.write(f"Health & Education Cess: ₹{tax_details['cess']:,.2f}")
-            st.write(f"Total Tax: ₹{tax_details['total_tax']:,.2f}")
-        
-        # Tax Breakup
-        st.header("Tax Breakup")
-        breakup_df = pd.DataFrame(tax_details['tax_breakup'])
-        st.table(breakup_df)
+            st.subheader("New Regime Breakup")
+            new_breakup_df = pd.DataFrame(new_regime['tax_breakup'])
+            st.table(new_breakup_df)
         
         # Recommendations
-        st.header("Tax Saving Recommendations")
-        for rec in recommendations:
-            with st.expander(f"Section {rec['section']} Recommendations"):
-                st.write(f"Current Utilization: ₹{rec['current_utilization']:,.2f}")
-                if isinstance(rec['remaining_limit'], (int, float)):
-                    st.write(f"Remaining Limit: ₹{rec['remaining_limit']:,.2f}")
-                st.write("Suggested Investment Options:")
-                for item in rec['suggested_instruments']:
-                    st.write(f"- {item}")
+        if comparison['recommended_regime'] == 'old':
+            st.header("Tax Saving Recommendations")
+            for rec in recommendations:
+                with st.expander(f"Section {rec['section']} Recommendations"):
+                    st.write(f"Current Utilization: ₹{rec['current_utilization']:,.2f}")
+                    if isinstance(rec['remaining_limit'], (int, float)):
+                        st.write(f"Remaining Limit: ₹{rec['remaining_limit']:,.2f}")
+                    st.write("Suggested Investment Options:")
+                    for item in rec['suggested_instruments']:
+                        st.write(f"- {item}")
         
         # Export Options
         st.header("Export Report")
         if st.button("Export to Excel"):
-            filename = calculator.generate_tax_report(tax_details, recommendations)
+            filename = calculator.generate_tax_report(comparison, recommendations)
             st.success(f"Report exported successfully as {filename}")
 
 if __name__ == "__main__":
