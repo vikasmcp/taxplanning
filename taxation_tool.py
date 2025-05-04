@@ -3,8 +3,9 @@ import os
 import traceback
 from typing import Any, List, Dict
 import pandas as pd
-import streamlit as st
+#import streamlit as st
 from datetime import datetime
+from github_integration import fetch_pr_changes  # Assuming this is in the same directory
 from mcp.server.fastmcp import FastMCP
 from dotenv import load_dotenv
 
@@ -103,6 +104,28 @@ class TaxCalculator:
         
         return recommendations
 
+    def compare_tax_regimes(self, income: float, deductions: Dict[str, float]) -> Dict[str, Any]:
+        """
+        Compare tax liability under both old and new regimes
+        Args:
+            income (float): Gross annual income
+            deductions (Dict[str, float]): Dictionary of deductions under various sections
+        Returns:
+            Dict containing comparison of both regimes
+        """
+        old_regime = self.calculate_tax(income, deductions, 'old')
+        new_regime = self.calculate_tax(income, deductions, 'new')
+        
+        savings = abs(old_regime['total_tax'] - new_regime['total_tax'])
+        recommended_regime = 'old' if old_regime['total_tax'] < new_regime['total_tax'] else 'new'
+        
+        return {
+            'old_regime': old_regime,
+            'new_regime': new_regime,
+            'savings': savings,
+            'recommended_regime': recommended_regime
+        }
+
     def generate_tax_report(self, tax_details: Dict[str, Any], recommendations: List[Dict[str, Any]], 
                           output_format: str = 'excel') -> str:
         """
@@ -200,7 +223,22 @@ class TaxPlannerMCP:
                 print(f"Error generating report: {str(e)}", file=sys.stderr)
                 traceback.print_exc(file=sys.stderr)
                 return str(e)
-
+        
+        @self.mcp.tool()
+        async def fetch_pr(repo_owner: str, repo_name: str, pr_number: int) -> Dict[str, Any]:
+            """Fetch changes from a GitHub pull request."""
+            print(f"Fetching PR #{pr_number} from {repo_owner}/{repo_name}", file=sys.stderr)
+            try:
+                pr_info = fetch_pr_changes(repo_owner, repo_name, pr_number)
+                if pr_info is None:
+                    print("No changes returned from fetch_pr_changes", file=sys.stderr)
+                    return {}
+                print(f"Successfully fetched PR information", file=sys.stderr)
+                return pr_info
+            except Exception as e:
+                print(f"Error fetching PR: {str(e)}", file=sys.stderr)
+                traceback.print_exc(file=sys.stderr)
+                return {}
     def run(self):
         """Start the MCP server"""
         try:
